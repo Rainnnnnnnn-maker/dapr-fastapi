@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+
+# 仮想環境
+venv/
+ENV/
+.env
+.venv/
+
+# VSCode
+.vscode/
+
+# Docker
+*.log
+docker-compose.override.yml
+
+# OSごとの不要ファイル
+.DS_Store
+Thumbs.db
+
+# テストやカバレッジ
+htmlcov/
+.coverage
+.tox/
+
+# Dapr
+.dapr/
+
+# その他
+*.sqlite3 
