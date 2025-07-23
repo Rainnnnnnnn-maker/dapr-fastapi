@@ -7,5 +7,8 @@ app = FastAPI()
 
 @app.get("/call-b")
 def call_b():
-    response = requests.get("http://localhost:3500/v1.0/invoke/app-b/method/hello")
+    # 呼び出し元のDaprサイドカー(ポート3501)経由でサービスBを呼び出す
+    response = requests.get(
+        "http://localhost:3501/v1.0/invoke/app-b/method/hello"
+    )
     return {"from_b": response.json()} 
