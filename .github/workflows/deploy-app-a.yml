@@ -1,39 +1,56 @@
-name: Build and Deploy app-a to Azure Container Apps
+name: Build and Deploy app-a (minimal)
 
 on:
   push:
-    branches:
-      - main
-
-env:
-  ACR_NAME: <your-acr-name>
-  RESOURCE_GROUP: <your-resource-group>
-  CONTAINERAPP_NAME: app-a
-  IMAGE_NAME: app-a
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
+    env:
+      RESOURCE_GROUP: ${{ secrets.RESOURCE_GROUP }}
+      CONTAINER_APP_NAME: ${{ secrets.CONTAINER_APP_NAME }}
+      REGISTRY_LOGIN_SERVER: ${{ secrets.REGISTRY_LOGIN_SERVER }}
+      REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+      ENVIRONMENT: ${{ secrets.ENVIRONMENT }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Login to Azure
+      - name: Azure Login
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Login to ACR
-        run: az acr login --name $ACR_NAME
+      - name: Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY_LOGIN_SERVER }}
+          username: ${{ env.REGISTRY_USERNAME }}
+          password: ${{ env.REGISTRY_PASSWORD }}
 
-      - name: Build and push Docker image
+      - name: Build and Push image
         run: |
-          docker build -t $ACR_NAME.azurecr.io/$IMAGE_NAME:${{ github.sha }} ./app_a
-          docker push $ACR_NAME.azurecr.io/$IMAGE_NAME:${{ github.sha }}
+          docker build -t $REGISTRY_LOGIN_SERVER/app-a:${{ github.sha }} ./app_a
+          docker push $REGISTRY_LOGIN_SERVER/app-a:${{ github.sha }}
 
       - name: Deploy to Azure Container Apps
         run: |
           az containerapp update \
-            --name $CONTAINERAPP_NAME \
-            --resource-group $RESOURCE_GROUP \
-            --image $ACR_NAME.azurecr.io/$IMAGE_NAME:${{ github.sha }} 
+            --name "$CONTAINER_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --image "$REGISTRY_LOGIN_SERVER/app-a:${GITHUB_SHA}" \
+            --registry-server "$REGISTRY_LOGIN_SERVER" \
+            --registry-username "$REGISTRY_USERNAME" \
+            --registry-password "$REGISTRY_PASSWORD" \
+            --set-env-vars ENVIRONMENT="$ENVIRONMENT"
+
+      - name: Simple health check
+        run: |
+          sleep 20
+          REV=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP_NAME" --query properties.latestRevisionName -o tsv)
+          HEALTH=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP_NAME" --revision "$REV" --query properties.healthState -o tsv || echo Unknown)
+          echo "Revision: $REV, Health: $HEALTH"
+          test "$HEALTH" = "Healthy"
